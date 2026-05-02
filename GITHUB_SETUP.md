@@ -1,14 +1,14 @@
-# 🚀 GitHub Repository Setup Guide
+# GitHub Repository Setup Guide
 
 ## Step 1: Create GitHub Repository
 
 1. **Go to GitHub**: https://github.com/polydeuces32
 2. **Click "New Repository"** (green button)
 3. **Repository Settings**:
-   - **Name**: `crisiscast`
-   - **Description**: `AI-powered market intelligence platform with 6-month forecasting and real-time volatility monitoring`
-   - **Visibility**: Public ✅
-   - **Initialize**: ❌ Don't check any boxes (we already have files)
+ - **Name**: `crisiscast`
+ - **Description**: `AI-powered market intelligence platform with 6-month forecasting and real-time volatility monitoring`
+ - **Visibility**: Public [OK]
+ - **Initialize**: [ERROR] Don't check any boxes (we already have files)
 
 ## Step 2: Connect Local Repository to GitHub
 
@@ -28,25 +28,25 @@ Your repository will include:
 
 ```
 crisiscast/
-├── 📁 app/                    # Main application code
-│   ├── 📁 api/               # API routes
-│   ├── 📁 core/              # Core functionality
-│   ├── 📁 services/          # Business logic
-│   └── 📁 scrapers/          # Data scraping
-├── 📁 scripts/               # CLI tools
-├── 📄 README.md              # Main documentation
-├── 📄 SETUP_GUIDE.md         # Detailed setup instructions
-├── 📄 demo.py                # Interactive demo
-├── 📄 Dockerfile             # Docker configuration
-├── 📄 docker-compose.yml     # Multi-service setup
-├── 📄 start.sh               # Linux/macOS startup script
-├── 📄 start.bat              # Windows startup script
-└── 📄 requirements.txt       # Python dependencies
+├── app/ # Main application code
+│ ├── api/ # API routes
+│ ├── core/ # Core functionality
+│ ├── services/ # Business logic
+│ └── scrapers/ # Data scraping
+├── scripts/ # CLI tools
+├── README.md # Main documentation
+├── SETUP_GUIDE.md # Detailed setup instructions
+├── demo.py # Interactive demo
+├── Dockerfile # Docker configuration
+├── docker-compose.yml # Multi-service setup
+├── start.sh # Linux/macOS startup script
+├── start.bat # Windows startup script
+└── requirements.txt # Python dependencies
 ```
 
 ## Step 4: GitHub Repository Features
 
-### 🏷️ Topics/Tags to Add
+### Topics/Tags to Add
 - `ai`
 - `machine-learning`
 - `fintech`
@@ -59,12 +59,12 @@ crisiscast/
 - `volatility`
 - `api`
 
-### 📋 Repository Description
+### Repository Description
 ```
 AI-powered market intelligence platform providing 6-month trend forecasts and real-time volatility monitoring across cryptocurrency, logistics, real estate, and e-commerce markets. Features 43 API endpoints, interactive documentation, and one-click Docker deployment.
 ```
 
-### 🔗 Website URL
+### Website URL
 ```
 http://localhost:8000/docs
 ```
@@ -77,33 +77,33 @@ Create `.github/workflows/ci.yml`:
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+ push:
+ branches: [ main ]
+ pull_request:
+ branches: [ main ]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.8, 3.9, 3.10]
+ test:
+ runs-on: ubuntu-latest
+ strategy:
+ matrix:
+ python-version: [3.8, 3.9, 3.10]
 
-    steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Run tests
-      run: |
-        python test_installation.py
+ steps:
+ - uses: actions/checkout@v3
+ - name: Set up Python ${{ matrix.python-version }}
+ uses: actions/setup-python@v3
+ with:
+ python-version: ${{ matrix.python-version }}
+ 
+ - name: Install dependencies
+ run: |
+ python -m pip install --upgrade pip
+ pip install -r requirements.txt
+ 
+ - name: Run tests
+ run: |
+ python test_installation.py
 ```
 
 ## Step 6: Add Repository Badges
@@ -128,17 +128,17 @@ Add to your README.md:
 
 ## Step 8: Social Media Ready Links
 
-### 🔗 GitHub Repository
+### GitHub Repository
 ```
 https://github.com/polydeuces32/crisiscast
 ```
 
-### 🔗 Clone Command
+### Clone Command
 ```bash
 git clone https://github.com/polydeuces32/crisiscast.git
 ```
 
-### 🔗 Quick Start
+### Quick Start
 ```bash
 git clone https://github.com/polydeuces32/crisiscast.git && cd crisiscast && ./start.sh
 ```
@@ -147,13 +147,13 @@ git clone https://github.com/polydeuces32/crisiscast.git && cd crisiscast && ./s
 
 Your README.md should include:
 
-- ✅ Project description
-- ✅ Features list
-- ✅ Quick start instructions
-- ✅ API documentation links
-- ✅ Screenshots/GIFs (optional)
-- ✅ Contributing guidelines
-- ✅ License information
+- [OK] Project description
+- [OK] Features list
+- [OK] Quick start instructions
+- [OK] API documentation links
+- [OK] Screenshots/GIFs (optional)
+- [OK] Contributing guidelines
+- [OK] License information
 
 ## Step 10: Final Checklist
 
@@ -167,7 +167,7 @@ Your README.md should include:
 - [ ] Discussions enabled (optional)
 - [ ] Wiki enabled (optional)
 
-## 🎯 Ready to Share!
+## Ready to Share!
 
 Once everything is set up, you can use these links in your social media posts:
 
@@ -175,4 +175,4 @@ Once everything is set up, you can use these links in your social media posts:
 **LinkedIn**: `https://github.com/polydeuces32/crisiscast`
 **Twitter**: `https://github.com/polydeuces32/crisiscast`
 
-Your repository will be live and ready for users to clone, fork, and contribute! 🚀
+Your repository will be live and ready for users to clone, fork, and contribute! 

@@ -1,4 +1,4 @@
-# 🚀 CrisisCast Setup Guide
+# CrisisCast Setup Guide
 
 ## Quick Start (5 minutes)
 
@@ -16,7 +16,7 @@ cd crisiscast
 ### Step 2: Create Virtual Environment
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate # On Windows: .venv\Scripts\activate
 ```
 
 ### Step 3: Install Dependencies
