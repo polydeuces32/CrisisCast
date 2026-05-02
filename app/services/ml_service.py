@@ -16,10 +16,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.model_selection import train_test_split
 import ta
-import warnings
-warnings.filterwarnings('ignore')
 
 from app.core.database import get_db, get_db_session, MarketData, Forecast, ModelPerformance
 from app.core.config import settings
@@ -234,10 +231,11 @@ class MLService:
                 feature_columns.extend([f'price_lag_{lag}', f'volume_lag_{lag}'])
             
             # Prepare features and target
+            # Target is next-period price (1-step-ahead) to avoid predicting the present from itself
             features = data[feature_columns].fillna(0).values
-            target = data['price'].values
-            
-            # Remove rows with NaN values
+            target = data['price'].shift(-1).values
+
+            # Remove rows where features or target are NaN (last row has no next price)
             valid_indices = ~(np.isnan(features).any(axis=1) | np.isnan(target))
             features = features[valid_indices]
             target = target[valid_indices]
@@ -406,37 +404,43 @@ class MLService:
             logger.error(f"Error calculating volatility score: {e}")
             return 0.5
     
-    async def _generate_ai_explanation(self, market: str, symbol: str, predicted_price: float, 
-                                     current_price: float, trend_direction: str, 
+    async def _generate_ai_explanation(self, market: str, symbol: str, predicted_price: float,
+                                     current_price: float, trend_direction: str,
                                      volatility_score: float) -> str:
-        """Generate AI explanation for forecast"""
-        try:
-            # This is a simplified explanation generator
-            # In practice, you'd integrate with OpenAI or Ollama
-            
-            price_change_percent = ((predicted_price - current_price) / current_price) * 100
-            
-            explanation = f"""
-            Based on the current market data for {symbol} in the {market} market, our analysis suggests:
-            
-            • **Price Forecast**: The predicted price of ${predicted_price:.2f} represents a {price_change_percent:+.1f}% change from the current price of ${current_price:.2f}
-            
-            • **Trend Analysis**: The {trend_direction} trend indicates {'upward momentum' if trend_direction == 'bullish' else 'downward pressure'} in the market
-            
-            • **Volatility Assessment**: With a volatility score of {volatility_score:.2f}, the market shows {'high' if volatility_score > 0.7 else 'moderate' if volatility_score > 0.4 else 'low'} volatility levels
-            
-            • **Risk Factors**: {'High volatility suggests increased risk and potential for significant price swings' if volatility_score > 0.7 else 'Moderate volatility indicates stable market conditions' if volatility_score > 0.4 else 'Low volatility suggests stable but potentially limited growth opportunities'}
-            
-            • **Recommendation**: {'Consider the high volatility when making investment decisions' if volatility_score > 0.7 else 'Monitor market conditions for any significant changes' if volatility_score > 0.4 else 'Stable conditions may present good entry points for long-term positions'}
-            
-            *This analysis is based on historical data and machine learning models. Past performance does not guarantee future results.*
-            """
-            
-            return explanation.strip()
-            
-        except Exception as e:
-            logger.error(f"Error generating AI explanation: {e}")
-            return "AI explanation not available at this time."
+        """Generate AI explanation for forecast. Uses OpenAI when key is configured."""
+        price_change_percent = ((predicted_price - current_price) / current_price) * 100
+        risk_level = "high" if volatility_score > 0.7 else "moderate" if volatility_score > 0.4 else "low"
+
+        if settings.openai_api_key:
+            try:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=settings.openai_api_key)
+                prompt = (
+                    f"You are a concise financial analyst. Summarize this forecast in 4 bullet points "
+                    f"(≤120 words total). No caveats beyond one brief disclaimer.\n\n"
+                    f"Market: {market} | Symbol: {symbol}\n"
+                    f"Current price: ${current_price:.2f} | Predicted next-period price: ${predicted_price:.2f} "
+                    f"({price_change_percent:+.1f}%)\n"
+                    f"Trend: {trend_direction} | Volatility: {volatility_score:.2f} ({risk_level} risk)"
+                )
+                response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=200,
+                    temperature=0.4,
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                logger.warning(f"OpenAI explanation failed, using template: {e}")
+
+        # Template fallback (no API key or OpenAI unavailable)
+        return (
+            f"**{symbol} ({market})** — {trend_direction.capitalize()} signal\n\n"
+            f"• **Price forecast**: ${predicted_price:.2f} ({price_change_percent:+.1f}% from ${current_price:.2f})\n"
+            f"• **Trend**: {'Upward momentum detected' if trend_direction == 'bullish' else 'Downward pressure detected'}\n"
+            f"• **Volatility**: {volatility_score:.2f} — {risk_level} risk environment\n"
+            f"• **Note**: Based on historical patterns; past performance does not guarantee future results."
+        )
     
     async def _save_forecast(self, forecast_data: Dict[str, Any]):
         """Save forecast to database"""

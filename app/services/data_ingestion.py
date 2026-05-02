@@ -116,8 +116,8 @@ class DataIngestionService:
     async def _ingest_from_crypto_exchange(self, exchange_name: str, exchange, symbols: List[str]):
         """Ingest data from a crypto exchange"""
         try:
-            # Get ticker data
-            tickers = exchange.fetch_tickers()
+            # fetch_tickers is synchronous; run in thread to avoid blocking the event loop
+            tickers = await asyncio.to_thread(exchange.fetch_tickers)
             
             for symbol in symbols:
                 if symbol in tickers:

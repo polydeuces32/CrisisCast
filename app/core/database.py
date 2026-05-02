@@ -2,6 +2,7 @@
 Database configuration and models
 """
 
+import logging
 from contextlib import contextmanager
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
@@ -150,12 +151,12 @@ def get_cached_volatility_score(market: str, symbol: str) -> float:
     return float(data) if data else None
 
 # Initialize database
+_db_logger = logging.getLogger(__name__)
+
 async def init_db():
     """Initialize database tables"""
     try:
         Base.metadata.create_all(bind=engine)
-        print("Database initialized successfully")
+        _db_logger.info("Database initialized successfully")
     except Exception as e:
-        print(f"Database initialization failed: {e}")
-        print("Continuing with limited functionality...")
-        # Don't raise the exception, just log it
+        _db_logger.error(f"Database initialization failed: {e} — continuing with limited functionality")
