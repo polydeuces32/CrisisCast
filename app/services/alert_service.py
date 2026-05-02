@@ -14,7 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
 
-from app.core.database import get_db, UserAlert, VolatilityAlert
+from app.core.database import get_db, UserAlert, VolatilityAlert, MarketData
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -267,28 +267,28 @@ class AlertService:
                 return
             
             # Create message
-            msg = MimeMultipart()
+            msg = MIMEMultipart()
             msg['From'] = settings.alert_email_username
             msg['To'] = alert.notification_endpoint
             msg['Subject'] = f"CrisisCast Alert: {alert.market}/{alert.symbol}"
-            
+
             # Create email body
             body = f"""
             CrisisCast Alert Notification
-            
+
             {message}
-            
+
             Alert Details:
             - Market: {alert.market}
             - Symbol: {alert.symbol}
             - Alert Type: {alert.alert_type}
             - Threshold: {alert.threshold_value}
             - Time: {datetime.utcnow().isoformat()}
-            
+
             This is an automated alert from CrisisCast.
             """
-            
-            msg.attach(MimeText(body, 'plain'))
+
+            msg.attach(MIMEText(body, 'plain'))
             
             # Send email
             server = smtplib.SMTP(settings.alert_email_smtp_server, settings.alert_email_port)
