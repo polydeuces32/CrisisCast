@@ -99,8 +99,10 @@ class AlertService:
                     alert_triggered = True
                     message = f"Volume alert: {alert.symbol} volume increased by {volume_change:.1f}%, above threshold of {alert.threshold_value:.1f}%"
             
-            # Trigger alert if condition is met
-            if alert_triggered:
+            # Trigger alert if condition is met and not in cooldown
+            if alert_triggered and not await self._was_recently_triggered(
+                alert.market, alert.symbol, alert.alert_type
+            ):
                 await self._trigger_alert(alert, current_value, message)
             
         except Exception as e:
@@ -131,11 +133,36 @@ class AlertService:
     async def _get_volatility_score(self, market: str, symbol: str) -> float:
         """Get current volatility score for a symbol"""
         try:
-            # This would integrate with the ML service
-            # For now, return a simulated value
-            import random
-            return random.uniform(0.1, 0.9)
-            
+            from app.core.database import get_cached_volatility_score
+            import pandas as pd
+
+            # Prefer cached score written by MLService
+            cached = get_cached_volatility_score(market, symbol)
+            if cached is not None:
+                return cached
+
+            # Fall back to direct calculation from DB
+            db = next(get_db())
+            try:
+                cutoff = datetime.utcnow() - timedelta(days=30)
+                rows = db.query(MarketData).filter(
+                    MarketData.market == market,
+                    MarketData.symbol == symbol,
+                    MarketData.timestamp >= cutoff
+                ).order_by(MarketData.timestamp.asc()).all()
+            finally:
+                db.close()
+
+            if len(rows) < 10:
+                return 0.5
+
+            prices = [r.price for r in rows if r.price is not None]
+            if len(prices) < 2:
+                return 0.5
+
+            volatility = pd.Series(prices).pct_change().dropna().std()
+            return float(min(1.0, max(0.0, volatility * 10)))
+
         except Exception as e:
             logger.error(f"Error getting volatility score: {e}")
             return 0.5
@@ -172,6 +199,27 @@ class AlertService:
         finally:
             db.close()
     
+    async def _was_recently_triggered(
+        self, market: str, symbol: str, alert_type: str, cooldown_minutes: int = 60
+    ) -> bool:
+        """Return True if an identical alert fired within the cooldown window."""
+        try:
+            db = next(get_db())
+            try:
+                cutoff = datetime.utcnow() - timedelta(minutes=cooldown_minutes)
+                recent = db.query(VolatilityAlert).filter(
+                    VolatilityAlert.market == market,
+                    VolatilityAlert.symbol == symbol,
+                    VolatilityAlert.alert_type == alert_type,
+                    VolatilityAlert.triggered_at >= cutoff
+                ).first()
+                return recent is not None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error checking recent trigger: {e}")
+            return False
+
     async def _trigger_alert(self, alert: UserAlert, current_value: float, message: str):
         """Trigger an alert"""
         try:

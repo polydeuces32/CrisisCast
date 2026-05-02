@@ -40,7 +40,7 @@ class DataIngestionService:
         # Initialize crypto exchanges
         self.exchanges = {
             'binance': ccxt.binance(),
-            'coinbase': ccxt.coinbasepro(),
+            'coinbase': ccxt.coinbase(),
             'kraken': ccxt.kraken()
         }
         

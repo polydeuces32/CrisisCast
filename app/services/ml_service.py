@@ -32,6 +32,7 @@ class MLService:
     def __init__(self):
         self.models = {}
         self.scalers = {}
+        self.model_scores = {}  # stores best R² per market/symbol key
         self.running = False
         self.model_dir = "data/models"
         
@@ -104,10 +105,10 @@ class MLService:
             logger.warning(f"Could not prepare features for {market}/{symbol}")
             return
         
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            features, target, test_size=0.2, random_state=42
-        )
+        # Chronological split — keeps temporal order to avoid data leakage
+        split_idx = int(len(features) * 0.8)
+        X_train, X_test = features[:split_idx], features[split_idx:]
+        y_train, y_test = target[:split_idx], target[split_idx:]
         
         # Scale features
         scaler = StandardScaler()
@@ -163,11 +164,12 @@ class MLService:
             except Exception as e:
                 logger.error(f"Error training {model_name} for {market}/{symbol}: {e}")
         
-        # Store best model
+        # Store best model and its R² score for use as confidence signal
         if best_model is not None:
             best_key = f"{market}_{symbol}_best"
             self.models[best_key] = best_model
             self.scalers[best_key] = scaler
+            self.model_scores[best_key] = max(0.0, best_score)  # clamp negative R²
     
     def _prepare_features(self, data: pd.DataFrame) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """Prepare features for ML models"""
@@ -350,8 +352,8 @@ class MLService:
             model = self.models[model_key]
             predicted_price = model.predict(latest_features_scaled)[0]
             
-            # Calculate confidence score (simplified)
-            confidence_score = min(0.95, max(0.1, 0.7 + np.random.normal(0, 0.1)))
+            # Confidence derived from the model's R² on the held-out test set
+            confidence_score = min(0.95, max(0.1, self.model_scores.get(model_key, 0.5)))
             
             # Determine trend direction
             current_price = data['price'].iloc[-1]
