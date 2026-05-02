@@ -21,7 +21,7 @@ import ta
 import warnings
 warnings.filterwarnings('ignore')
 
-from app.core.database import get_db, MarketData, Forecast, ModelPerformance
+from app.core.database import get_db, get_db_session, MarketData, Forecast, ModelPerformance
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -252,57 +252,28 @@ class MLService:
                                     score: float, y_test: np.ndarray, y_pred: np.ndarray):
         """Save model performance metrics"""
         try:
-            db = next(get_db())
-            
-            # Calculate additional metrics
             mse = mean_squared_error(y_test, y_pred)
             mae = mean_absolute_error(y_test, y_pred)
-            
-            # Save performance record
-            performance = ModelPerformance(
-                model_name=model_name,
-                market=market,
-                symbol=symbol,
-                metric_name='r2_score',
-                metric_value=score,
-                evaluation_date=datetime.utcnow(),
-                model_version='1.0'
-            )
-            
-            db.add(performance)
-            
-            # Save MSE
-            mse_performance = ModelPerformance(
-                model_name=model_name,
-                market=market,
-                symbol=symbol,
-                metric_name='mse',
-                metric_value=mse,
-                evaluation_date=datetime.utcnow(),
-                model_version='1.0'
-            )
-            
-            db.add(mse_performance)
-            
-            # Save MAE
-            mae_performance = ModelPerformance(
-                model_name=model_name,
-                market=market,
-                symbol=symbol,
-                metric_name='mae',
-                metric_value=mae,
-                evaluation_date=datetime.utcnow(),
-                model_version='1.0'
-            )
-            
-            db.add(mae_performance)
-            
-            db.commit()
-            
+
+            with get_db_session() as db:
+                db.add(ModelPerformance(
+                    model_name=model_name, market=market, symbol=symbol,
+                    metric_name='r2_score', metric_value=score,
+                    evaluation_date=datetime.utcnow(), model_version='1.0'
+                ))
+                db.add(ModelPerformance(
+                    model_name=model_name, market=market, symbol=symbol,
+                    metric_name='mse', metric_value=mse,
+                    evaluation_date=datetime.utcnow(), model_version='1.0'
+                ))
+                db.add(ModelPerformance(
+                    model_name=model_name, market=market, symbol=symbol,
+                    metric_name='mae', metric_value=mae,
+                    evaluation_date=datetime.utcnow(), model_version='1.0'
+                ))
+                db.commit()
         except Exception as e:
             logger.error(f"Error saving model performance: {e}")
-        finally:
-            db.close()
     
     async def generate_forecast(self, market: str, symbol: str, horizon_days: int = 180, 
                               include_ai_explanation: bool = True) -> Dict[str, Any]:
@@ -470,67 +441,49 @@ class MLService:
     async def _save_forecast(self, forecast_data: Dict[str, Any]):
         """Save forecast to database"""
         try:
-            db = next(get_db())
-            
-            forecast = Forecast(
-                market=forecast_data["market"],
-                symbol=forecast_data["symbol"],
-                forecast_date=datetime.fromisoformat(forecast_data["forecast_date"]),
-                horizon_days=forecast_data["horizon_days"],
-                predicted_price=forecast_data["predicted_price"],
-                confidence_score=forecast_data["confidence_score"],
-                trend_direction=forecast_data["trend_direction"],
-                volatility_score=forecast_data["volatility_score"],
-                model_version=forecast_data["model_version"],
-                additional_metrics=forecast_data["additional_metrics"]
-            )
-            
-            db.add(forecast)
-            db.commit()
-            
+            with get_db_session() as db:
+                db.add(Forecast(
+                    market=forecast_data["market"],
+                    symbol=forecast_data["symbol"],
+                    forecast_date=datetime.fromisoformat(forecast_data["forecast_date"]),
+                    horizon_days=forecast_data["horizon_days"],
+                    predicted_price=forecast_data["predicted_price"],
+                    confidence_score=forecast_data["confidence_score"],
+                    trend_direction=forecast_data["trend_direction"],
+                    volatility_score=forecast_data["volatility_score"],
+                    model_version=forecast_data["model_version"],
+                    additional_metrics=forecast_data["additional_metrics"]
+                ))
+                db.commit()
         except Exception as e:
             logger.error(f"Error saving forecast: {e}")
-        finally:
-            db.close()
     
     async def _get_market_data(self, market: str, symbol: Optional[str] = None) -> pd.DataFrame:
         """Get market data from database"""
         try:
-            db = next(get_db())
-            
-            query = db.query(MarketData).filter(MarketData.market == market)
-            
-            if symbol:
-                query = query.filter(MarketData.symbol == symbol)
-            
-            # Get last 365 days of data
-            cutoff_date = datetime.utcnow() - timedelta(days=365)
-            query = query.filter(MarketData.timestamp >= cutoff_date)
-            
-            data = query.order_by(MarketData.timestamp.asc()).all()
-            
+            with get_db_session() as db:
+                query = db.query(MarketData).filter(MarketData.market == market)
+                if symbol:
+                    query = query.filter(MarketData.symbol == symbol)
+                cutoff_date = datetime.utcnow() - timedelta(days=365)
+                query = query.filter(MarketData.timestamp >= cutoff_date)
+                data = query.order_by(MarketData.timestamp.asc()).all()
+
             if not data:
                 return pd.DataFrame()
-            
-            # Convert to DataFrame
-            df_data = []
-            for record in data:
-                df_data.append({
-                    'timestamp': record.timestamp,
-                    'price': record.price,
-                    'volume': record.volume,
-                    'market_cap': record.market_cap,
-                    'symbol': record.symbol,
-                    'source': record.source
-                })
-            
-            return pd.DataFrame(df_data)
-            
+
+            return pd.DataFrame([{
+                'timestamp': r.timestamp,
+                'price': r.price,
+                'volume': r.volume,
+                'market_cap': r.market_cap,
+                'symbol': r.symbol,
+                'source': r.source,
+            } for r in data])
+
         except Exception as e:
             logger.error(f"Error getting market data: {e}")
             return pd.DataFrame()
-        finally:
-            db.close()
     
     async def _load_model(self, model_key: str):
         """Load model from disk"""

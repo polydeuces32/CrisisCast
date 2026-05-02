@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     
     # Model Settings
     model_update_interval: int = Field(default=3600, env="MODEL_UPDATE_INTERVAL")  # seconds
+    data_ingestion_interval: int = Field(default=300, env="DATA_INGESTION_INTERVAL")  # seconds (5 min)
     forecast_horizon_days: int = Field(default=180, env="FORECAST_HORIZON_DAYS")  # 6 months
     volatility_window_days: int = Field(default=30, env="VOLATILITY_WINDOW_DAYS")
     

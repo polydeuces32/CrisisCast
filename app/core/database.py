@@ -2,6 +2,7 @@
 Database configuration and models
 """
 
+from contextlib import contextmanager
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -99,12 +100,25 @@ class ModelPerformance(Base):
     model_version = Column(String(50))
     created_at = Column(DateTime, default=func.now())
 
-# Database dependency
+# Database dependency (for FastAPI Depends)
 def get_db() -> Generator[Session, None, None]:
     """Get database session"""
     db = SessionLocal()
     try:
         yield db
+    finally:
+        db.close()
+
+# Synchronous context manager for use in background services
+@contextmanager
+def get_db_session():
+    """Context manager for DB sessions outside of request scope."""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

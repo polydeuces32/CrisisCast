@@ -5,12 +5,14 @@ Alert API endpoints
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
 from app.core.database import get_db, UserAlert, VolatilityAlert
+from app.core.enums import MarketType, AlertType, NotificationMethod
 from app.services.alert_service import AlertService
 from app.core.config import settings
 
@@ -19,11 +21,11 @@ router = APIRouter()
 # Pydantic models for request/response
 class AlertCreate(BaseModel):
     user_id: str
-    market: str
+    market: MarketType
     symbol: str
-    alert_type: str
+    alert_type: AlertType
     threshold_value: float
-    notification_method: str
+    notification_method: NotificationMethod
     notification_endpoint: str
 
 class AlertUpdate(BaseModel):
@@ -201,9 +203,17 @@ async def get_triggered_alerts(
     )
     
     if user_id:
-        # This would require joining with UserAlert table
-        # For now, return all triggered alerts
-        pass
+        pairs = (
+            db.query(UserAlert.market, UserAlert.symbol)
+            .filter(UserAlert.user_id == user_id)
+            .distinct()
+            .all()
+        )
+        if not pairs:
+            return {"triggered_alerts": [], "total_triggered": 0, "time_range_hours": hours_back}
+        query = query.filter(
+            or_(*[and_(VolatilityAlert.market == m, VolatilityAlert.symbol == s) for m, s in pairs])
+        )
     
     if market:
         query = query.filter(VolatilityAlert.market == market)

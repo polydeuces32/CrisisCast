@@ -65,7 +65,7 @@ class DataIngestionService:
         while self.running:
             try:
                 await self.ingest_market_data(market)
-                await asyncio.sleep(settings.model_update_interval)  # Wait before next ingestion
+                await asyncio.sleep(settings.data_ingestion_interval)
             except Exception as e:
                 logger.error(f"Error in continuous ingestion for {market}: {e}")
                 await asyncio.sleep(60)  # Wait 1 minute before retry

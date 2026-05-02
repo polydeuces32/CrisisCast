@@ -5,7 +5,7 @@ API-first SaaS platform for trend forecasting and volatility insights
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -17,6 +17,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.auth import require_api_key
 from app.api.routes import forecasts, volatility, alerts, markets, admin
 from app.services.data_ingestion import DataIngestionService
 from app.services.ml_service import MLService
@@ -73,12 +74,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routes
-app.include_router(forecasts.router, prefix="/api/v1/forecasts", tags=["forecasts"])
-app.include_router(volatility.router, prefix="/api/v1/volatility", tags=["volatility"])
-app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["alerts"])
-app.include_router(markets.router, prefix="/api/v1/markets", tags=["markets"])
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+# Include API routes — all protected by API key
+_auth = [Depends(require_api_key)]
+app.include_router(forecasts.router, prefix="/api/v1/forecasts", tags=["forecasts"], dependencies=_auth)
+app.include_router(volatility.router, prefix="/api/v1/volatility", tags=["volatility"], dependencies=_auth)
+app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["alerts"], dependencies=_auth)
+app.include_router(markets.router, prefix="/api/v1/markets", tags=["markets"], dependencies=_auth)
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"], dependencies=_auth)
 
 @app.get("/")
 async def root():

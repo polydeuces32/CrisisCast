@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import json
 
 from sqlalchemy import text
-from app.core.database import get_db, get_redis, ModelPerformance
+from app.core.database import get_db, get_db_session, get_redis, ModelPerformance
 from app.services.ml_service import MLService
 from app.services.data_ingestion import DataIngestionService
 from app.services.alert_service import AlertService
@@ -33,8 +33,8 @@ async def get_system_status():
     
     # Check database connection
     try:
-        db = next(get_db())
-        db.execute(text("SELECT 1"))
+        with get_db_session() as db:
+            db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
         db_status = f"error: {str(e)}"

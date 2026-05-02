@@ -14,7 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
 
-from app.core.database import get_db, UserAlert, VolatilityAlert, MarketData
+from app.core.database import get_db, get_db_session, UserAlert, VolatilityAlert, MarketData
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -47,21 +47,15 @@ class AlertService:
     async def check_all_alerts(self):
         """Check all active alerts"""
         try:
-            db = next(get_db())
-            
-            # Get all active user alerts
-            active_alerts = db.query(UserAlert).filter(UserAlert.is_active == True).all()
-            
+            with get_db_session() as db:
+                active_alerts = db.query(UserAlert).filter(UserAlert.is_active == True).all()
             for alert in active_alerts:
                 try:
                     await self.check_alert(alert)
                 except Exception as e:
                     logger.error(f"Error checking alert {alert.id}: {e}")
-            
         except Exception as e:
             logger.error(f"Error checking alerts: {e}")
-        finally:
-            db.close()
     
     async def check_alert(self, alert: UserAlert):
         """Check a specific alert"""
@@ -111,24 +105,15 @@ class AlertService:
     async def _get_current_value(self, market: str, symbol: str) -> Optional[float]:
         """Get current value for a symbol"""
         try:
-            db = next(get_db())
-            
-            # Get latest price data
-            latest_data = db.query(MarketData).filter(
-                MarketData.market == market,
-                MarketData.symbol == symbol
-            ).order_by(MarketData.timestamp.desc()).first()
-            
-            if latest_data and latest_data.price:
-                return float(latest_data.price)
-            
-            return None
-            
+            with get_db_session() as db:
+                latest_data = db.query(MarketData).filter(
+                    MarketData.market == market,
+                    MarketData.symbol == symbol
+                ).order_by(MarketData.timestamp.desc()).first()
+                return float(latest_data.price) if latest_data and latest_data.price else None
         except Exception as e:
             logger.error(f"Error getting current value: {e}")
             return None
-        finally:
-            db.close()
     
     async def _get_volatility_score(self, market: str, symbol: str) -> float:
         """Get current volatility score for a symbol"""
@@ -170,43 +155,32 @@ class AlertService:
     async def _get_volume_change(self, market: str, symbol: str) -> float:
         """Get volume change percentage for a symbol"""
         try:
-            db = next(get_db())
-            
-            # Get recent volume data
             cutoff_time = datetime.utcnow() - timedelta(hours=24)
-            recent_data = db.query(MarketData).filter(
-                MarketData.market == market,
-                MarketData.symbol == symbol,
-                MarketData.timestamp >= cutoff_time
-            ).order_by(MarketData.timestamp.asc()).all()
-            
+            with get_db_session() as db:
+                recent_data = db.query(MarketData).filter(
+                    MarketData.market == market,
+                    MarketData.symbol == symbol,
+                    MarketData.timestamp >= cutoff_time
+                ).order_by(MarketData.timestamp.asc()).all()
+
             if len(recent_data) < 2:
                 return 0.0
-            
-            # Calculate volume change
             current_volume = recent_data[-1].volume or 0
             previous_volume = recent_data[0].volume or 0
-            
             if previous_volume == 0:
                 return 0.0
-            
-            volume_change = ((current_volume - previous_volume) / previous_volume) * 100
-            return volume_change
-            
+            return ((current_volume - previous_volume) / previous_volume) * 100
         except Exception as e:
             logger.error(f"Error getting volume change: {e}")
             return 0.0
-        finally:
-            db.close()
     
     async def _was_recently_triggered(
         self, market: str, symbol: str, alert_type: str, cooldown_minutes: int = 60
     ) -> bool:
         """Return True if an identical alert fired within the cooldown window."""
         try:
-            db = next(get_db())
-            try:
-                cutoff = datetime.utcnow() - timedelta(minutes=cooldown_minutes)
+            cutoff = datetime.utcnow() - timedelta(minutes=cooldown_minutes)
+            with get_db_session() as db:
                 recent = db.query(VolatilityAlert).filter(
                     VolatilityAlert.market == market,
                     VolatilityAlert.symbol == symbol,
@@ -214,8 +188,6 @@ class AlertService:
                     VolatilityAlert.triggered_at >= cutoff
                 ).first()
                 return recent is not None
-            finally:
-                db.close()
         except Exception as e:
             logger.error(f"Error checking recent trigger: {e}")
             return False
@@ -223,32 +195,22 @@ class AlertService:
     async def _trigger_alert(self, alert: UserAlert, current_value: float, message: str):
         """Trigger an alert"""
         try:
-            db = next(get_db())
-            
-            # Create volatility alert record
-            volatility_alert = VolatilityAlert(
-                market=alert.market,
-                symbol=alert.symbol,
-                alert_type=alert.alert_type,
-                threshold_value=alert.threshold_value,
-                current_value=current_value,
-                severity=self._determine_severity(alert.alert_type, current_value, alert.threshold_value),
-                message=message,
-                is_active=True
-            )
-            
-            db.add(volatility_alert)
-            db.commit()
-            
-            # Send notification
+            with get_db_session() as db:
+                db.add(VolatilityAlert(
+                    market=alert.market,
+                    symbol=alert.symbol,
+                    alert_type=alert.alert_type,
+                    threshold_value=alert.threshold_value,
+                    current_value=current_value,
+                    severity=self._determine_severity(alert.alert_type, current_value, alert.threshold_value),
+                    message=message,
+                    is_active=True
+                ))
+                db.commit()
             await self._send_notification(alert, message)
-            
             logger.info(f"Alert triggered: {alert.market}/{alert.symbol} - {message}")
-            
         except Exception as e:
             logger.error(f"Error triggering alert: {e}")
-        finally:
-            db.close()
     
     def _determine_severity(self, alert_type: str, current_value: float, threshold_value: float) -> str:
         """Determine alert severity"""
@@ -412,53 +374,30 @@ class AlertService:
     async def get_alert_statistics(self, user_id: str, days_back: int = 30) -> Dict[str, Any]:
         """Get alert statistics for a user"""
         try:
-            db = next(get_db())
-            
             cutoff_date = datetime.utcnow() - timedelta(days=days_back)
-            
-            # Get user alerts
-            user_alerts = db.query(UserAlert).filter(
-                UserAlert.user_id == user_id,
-                UserAlert.created_at >= cutoff_date
-            ).all()
-            
-            # Get triggered alerts
-            triggered_alerts = db.query(VolatilityAlert).filter(
-                VolatilityAlert.triggered_at >= cutoff_date
-            ).all()
-            
-            # Calculate statistics
-            stats = {
+            with get_db_session() as db:
+                user_alerts = db.query(UserAlert).filter(
+                    UserAlert.user_id == user_id,
+                    UserAlert.created_at >= cutoff_date
+                ).all()
+                triggered_alerts = db.query(VolatilityAlert).filter(
+                    VolatilityAlert.triggered_at >= cutoff_date
+                ).all()
+
+            stats: Dict[str, Any] = {
                 "total_alerts": len(user_alerts),
-                "active_alerts": len([a for a in user_alerts if a.is_active]),
+                "active_alerts": sum(1 for a in user_alerts if a.is_active),
                 "triggered_alerts": len(triggered_alerts),
                 "alerts_by_market": {},
                 "alerts_by_type": {},
-                "triggered_by_severity": {}
+                "triggered_by_severity": {},
             }
-            
-            # Group by market
             for alert in user_alerts:
-                if alert.market not in stats["alerts_by_market"]:
-                    stats["alerts_by_market"][alert.market] = 0
-                stats["alerts_by_market"][alert.market] += 1
-            
-            # Group by type
-            for alert in user_alerts:
-                if alert.alert_type not in stats["alerts_by_type"]:
-                    stats["alerts_by_type"][alert.alert_type] = 0
-                stats["alerts_by_type"][alert.alert_type] += 1
-            
-            # Group triggered alerts by severity
+                stats["alerts_by_market"][alert.market] = stats["alerts_by_market"].get(alert.market, 0) + 1
+                stats["alerts_by_type"][alert.alert_type] = stats["alerts_by_type"].get(alert.alert_type, 0) + 1
             for alert in triggered_alerts:
-                if alert.severity not in stats["triggered_by_severity"]:
-                    stats["triggered_by_severity"][alert.severity] = 0
-                stats["triggered_by_severity"][alert.severity] += 1
-            
+                stats["triggered_by_severity"][alert.severity] = stats["triggered_by_severity"].get(alert.severity, 0) + 1
             return stats
-            
         except Exception as e:
             logger.error(f"Error getting alert statistics: {e}")
             return {}
-        finally:
-            db.close()

@@ -43,13 +43,19 @@ async def get_volatility_scores(
     
     # Calculate new volatility score
     ml_service = MLService()
-    volatility_data = await ml_service.calculate_volatility_score(market, symbol, timeframe)
-    
-    # Cache the result
-    if symbol and "volatility_score" in volatility_data:
-        cache_volatility_score(market, symbol, volatility_data["volatility_score"])
-    
-    return volatility_data
+    volatility_score = await ml_service.calculate_volatility_score(market, symbol or "", timeframe)
+
+    if symbol:
+        cache_volatility_score(market, symbol, volatility_score)
+
+    return {
+        "market": market,
+        "symbol": symbol,
+        "volatility_score": volatility_score,
+        "timeframe": timeframe,
+        "generated_at": datetime.utcnow().isoformat(),
+        "cached": False,
+    }
 
 @router.get("/{market}/{symbol}")
 async def get_symbol_volatility(
